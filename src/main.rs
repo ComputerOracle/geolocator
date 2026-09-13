@@ -284,7 +284,13 @@ async fn distance(coords: web::Json<Coords>) -> impl Responder {
 // The entry point. actix_web::main turns main() into an async function for us.
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    println!("Listening on http://0.0.0.0:8080 ...");
+    // Render (and most cloud hosts) assign their own port via $PORT - fall back
+    // to 8080 for running it locally, where that variable won't be set.
+    let port: u16 = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8080);
+    println!("Listening on http://0.0.0.0:{port} ...");
 
     let device_cache: web::Data<DeviceCache> = web::Data::new(Mutex::new(HashMap::new()));
 
@@ -299,7 +305,7 @@ async fn main() -> std::io::Result<()> {
             .service(proximity)
             .service(scan)
     })
-        .bind(("0.0.0.0", 8080))?
+        .bind(("0.0.0.0", port))?
         .run()
         .await
 }

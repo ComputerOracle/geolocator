@@ -1,6 +1,7 @@
 use crate::events::{DeviceEvent, EventSender};
 use crate::math::rssi_to_distance_meters;
 use crate::models::{DeviceCache, SeenDevice};
+use crate::services::metrics::TelemetryRegistry;
 use actix_web::web;
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::Manager;
@@ -12,9 +13,13 @@ use tokio::time::sleep;
 pub const FRESHNESS_WINDOW: Duration = Duration::from_secs(40);
 
 /// Long-running background supervisor task ensuring Bluetooth scanning runs continuously.
-pub async fn run_bluetooth_scanner(cache: web::Data<DeviceCache>, event_sender: web::Data<EventSender>) {
+pub async fn run_bluetooth_scanner(
+    cache: web::Data<DeviceCache>,
+    event_sender: web::Data<EventSender>,
+    registry: web::Data<TelemetryRegistry>,
+) {
     loop {
-        if let Err(e) = scan_until_disconnected(&cache, &event_sender).await {
+        if let Err(e) = scan_until_disconnected(&cache, &event_sender, &registry).await {
             eprintln!("[bluetooth] scanner error: {e} - retrying in 3s");
         } else {
             eprintln!("[bluetooth] connection dropped - retrying in 3s");
@@ -24,10 +29,11 @@ pub async fn run_bluetooth_scanner(cache: web::Data<DeviceCache>, event_sender: 
 }
 
 /// Discovers the primary system Bluetooth adapter, listens for BLE events, updates the cache with smoothing,
-/// and broadcasts real-time telemetry events.
+/// records metrics, and broadcasts real-time telemetry events.
 async fn scan_until_disconnected(
     cache: &web::Data<DeviceCache>,
     event_sender: &web::Data<EventSender>,
+    registry: &web::Data<TelemetryRegistry>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let manager = Manager::new().await?;
     let adapters = manager.adapters().await?;
@@ -70,6 +76,8 @@ async fn scan_until_disconnected(
                 })
                 .or_insert_with(|| SeenDevice::new(name.clone(), rssi, dist));
         }
+
+        registry.record_ble_event();
 
         // Broadcast to SSE stream subscribers
         let event_payload = DeviceEvent::new(event_kind, dev_id_str, name, rssi, dist);

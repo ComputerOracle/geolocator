@@ -11,14 +11,43 @@ use crate::models::{
     Coords, DeviceCache, DeviceHistoryResponse, DistanceResponse, GeofenceRequest,
     GeofenceResponse, NavQuery, ProximityRequest, ProximityResponse, ScanResult,
 };
+use crate::services::metrics::TelemetryRegistry;
 use actix_web::web::Bytes;
 use actix_web::{get, post, web, HttpResponse, Responder};
 use futures::StreamExt as _;
 
-/// Health check endpoint.
+/// Root ping endpoint.
 #[get("/")]
 pub async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Server is up! 🚀")
+}
+
+/// System health check endpoint providing service uptime and basic operational flags.
+#[get("/health")]
+pub async fn health(
+    registry: web::Data<TelemetryRegistry>,
+    cache: web::Data<DeviceCache>,
+) -> impl Responder {
+    let active_count = cache
+        .lock()
+        .map(|c| c.values().filter(|d| d.last_seen.elapsed() < FRESHNESS_WINDOW).count())
+        .unwrap_or(0);
+
+    HttpResponse::Ok().json(registry.snapshot(active_count))
+}
+
+/// Operational telemetry metrics report.
+#[get("/metrics")]
+pub async fn metrics(
+    registry: web::Data<TelemetryRegistry>,
+    cache: web::Data<DeviceCache>,
+) -> impl Responder {
+    let active_count = cache
+        .lock()
+        .map(|c| c.values().filter(|d| d.last_seen.elapsed() < FRESHNESS_WINDOW).count())
+        .unwrap_or(0);
+
+    HttpResponse::Ok().json(registry.snapshot(active_count))
 }
 
 /// Distance calculation endpoint with multi-unit support, dynamic thresholds, and step estimations.
@@ -26,7 +55,9 @@ pub async fn hello() -> impl Responder {
 pub async fn distance(
     coords: web::Json<Coords>,
     query: web::Query<NavQuery>,
+    registry: web::Data<TelemetryRegistry>,
 ) -> Result<HttpResponse, AppError> {
+    registry.record_distance();
     coords.validate()?;
 
     let unit = DistanceUnit::from_str_opt(query.unit.as_deref());
@@ -57,7 +88,9 @@ pub async fn distance(
 pub async fn proximity(
     req: web::Json<ProximityRequest>,
     query: web::Query<NavQuery>,
+    registry: web::Data<TelemetryRegistry>,
 ) -> Result<HttpResponse, AppError> {
+    registry.record_proximity();
     req.validate()?;
 
     let unit = DistanceUnit::from_str_opt(query.unit.as_deref());
@@ -89,7 +122,11 @@ pub async fn proximity(
 
 /// Evaluates whether a coordinate target is within a defined circular geofence boundary.
 #[post("/geofence")]
-pub async fn geofence(req: web::Json<GeofenceRequest>) -> Result<HttpResponse, AppError> {
+pub async fn geofence(
+    req: web::Json<GeofenceRequest>,
+    registry: web::Data<TelemetryRegistry>,
+) -> Result<HttpResponse, AppError> {
+    registry.record_geofence();
     req.validate()?;
 
     let dist = haversine_distance_meters(
@@ -118,9 +155,13 @@ pub async fn geofence(req: web::Json<GeofenceRequest>) -> Result<HttpResponse, A
     }))
 }
 
-/// Instant nearby device scan reading from the shared Bluetooth cache, enhanced with signal smoothing and trends.
+/// Instant nearby device scan reading from the shared Bluetooth cache.
 #[get("/scan")]
-pub async fn scan(cache: web::Data<DeviceCache>) -> Result<HttpResponse, AppError> {
+pub async fn scan(
+    cache: web::Data<DeviceCache>,
+    registry: web::Data<TelemetryRegistry>,
+) -> Result<HttpResponse, AppError> {
+    registry.record_scan();
     let seen = cache
         .lock()
         .map_err(|_| AppError::LockError("Failed to acquire lock on device cache".to_string()))?;

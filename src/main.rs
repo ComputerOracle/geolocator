@@ -1,11 +1,7 @@
-pub mod bluetooth;
-pub mod handlers;
-pub mod math;
-pub mod models;
-
 use actix_web::{web, App, HttpServer};
-use bluetooth::run_bluetooth_scanner;
-use models::DeviceCache;
+use geolocator::bluetooth::run_bluetooth_scanner;
+use geolocator::handlers;
+use geolocator::models::DeviceCache;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -19,7 +15,6 @@ async fn main() -> std::io::Result<()> {
 
     let device_cache: web::Data<DeviceCache> = web::Data::new(Mutex::new(HashMap::new()));
 
-    // Launch background Bluetooth scanning supervisor
     actix_web::rt::spawn(run_bluetooth_scanner(device_cache.clone()));
 
     HttpServer::new(move || {

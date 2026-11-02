@@ -3,6 +3,7 @@ use geolocator::bluetooth::run_bluetooth_scanner;
 use geolocator::events::{init_event_bus, EventSender};
 use geolocator::handlers;
 use geolocator::models::DeviceCache;
+use geolocator::services::metrics::TelemetryRegistry;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -16,14 +17,22 @@ async fn main() -> std::io::Result<()> {
 
     let device_cache: web::Data<DeviceCache> = web::Data::new(Mutex::new(HashMap::new()));
     let event_sender: web::Data<EventSender> = web::Data::new(init_event_bus());
+    let telemetry: web::Data<TelemetryRegistry> = web::Data::new(TelemetryRegistry::default());
 
-    actix_web::rt::spawn(run_bluetooth_scanner(device_cache.clone(), event_sender.clone()));
+    actix_web::rt::spawn(run_bluetooth_scanner(
+        device_cache.clone(),
+        event_sender.clone(),
+        telemetry.clone(),
+    ));
 
     HttpServer::new(move || {
         App::new()
             .app_data(device_cache.clone())
             .app_data(event_sender.clone())
+            .app_data(telemetry.clone())
             .service(handlers::hello)
+            .service(handlers::health)
+            .service(handlers::metrics)
             .service(handlers::distance)
             .service(handlers::proximity)
             .service(handlers::geofence)

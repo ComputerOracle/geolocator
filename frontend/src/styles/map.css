@@ -1,0 +1,159 @@
+.map-container-grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+  height: calc(100vh - 170px);
+  min-height: 580px;
+}
+
+@media (max-width: 1024px) {
+  .map-container-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
+.map-card {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  min-height: 500px;
+}
+
+#leaflet-map {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  background: #080b11;
+  z-index: 10;
+}
+
+/* Compass HUD Overlay */
+.compass-hud {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 100;
+  background: rgba(8, 11, 17, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+  border-radius: 50%;
+  width: 90px;
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.compass-dial {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 1px dashed rgba(0, 240, 255, 0.3);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compass-needle {
+  position: absolute;
+  width: 4px;
+  height: 38px;
+  background: linear-gradient(to top, var(--accent-rose) 50%, var(--accent-cyan) 50%);
+  border-radius: 2px;
+  transform-origin: center center;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+}
+
+.compass-heading-text {
+  position: absolute;
+  bottom: -22px;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent-cyan);
+  font-weight: 700;
+  text-align: center;
+  width: 100%;
+}
+
+/* Sidebar Controls */
+.map-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.control-group {
+  padding: 18px;
+}
+
+.group-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.coords-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.label-mini {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.hud-result-box {
+  background: rgba(0, 240, 255, 0.05);
+  border: 1px solid rgba(0, 240, 255, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.result-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.result-val {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--accent-emerald);
+}
+
+.badge-zone {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(0, 255, 136, 0.15);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+}
+
+.badge-zone.distant {
+  background: rgba(255, 170, 0, 0.15);
+  color: var(--accent-amber);
+  border-color: rgba(255, 170, 0, 0.3);
+}

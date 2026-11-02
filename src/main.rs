@@ -1,5 +1,5 @@
 use actix_web::{web, App, HttpServer};
-use geolocator::bluetooth::run_bluetooth_scanner;
+use geolocator::bluetooth::run_bluetooth_supervisor;
 use geolocator::events::{init_event_bus, EventSender};
 use geolocator::handlers;
 use geolocator::models::DeviceCache;
@@ -19,7 +19,7 @@ async fn main() -> std::io::Result<()> {
     let event_sender: web::Data<EventSender> = web::Data::new(init_event_bus());
     let telemetry: web::Data<TelemetryRegistry> = web::Data::new(TelemetryRegistry::default());
 
-    actix_web::rt::spawn(run_bluetooth_scanner(
+    actix_web::rt::spawn(run_bluetooth_supervisor(
         device_cache.clone(),
         event_sender.clone(),
         telemetry.clone(),

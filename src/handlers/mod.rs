@@ -73,13 +73,13 @@ pub async fn distance(
     Ok(HttpResponse::Ok().json(DistanceResponse {
         distance: (converted_dist * 100.0).round() / 100.0,
         distance_meters: (meters * 100.0).round() / 100.0,
-        unit: unit.label(),
+        unit: unit.label().to_string(),
         estimated_steps: steps,
         threshold,
         within_threshold: steps <= threshold,
         bearing_degrees: (bearing * 10.0).round() / 10.0,
-        direction: direction_from_bearing(bearing),
-        proximity_zone: zone,
+        direction: direction_from_bearing(bearing).to_string(),
+        proximity_zone: zone.to_string(),
     }))
 }
 
@@ -110,13 +110,13 @@ pub async fn proximity(
         bluetooth_detected,
         distance: (converted_dist * 100.0).round() / 100.0,
         gps_distance_meters: (meters * 100.0).round() / 100.0,
-        unit: unit.label(),
+        unit: unit.label().to_string(),
         estimated_steps: steps,
         threshold,
         within_threshold: steps <= threshold,
         bearing_degrees: (bearing * 10.0).round() / 10.0,
-        direction: direction_from_bearing(bearing),
-        proximity_zone: zone,
+        direction: direction_from_bearing(bearing).to_string(),
+        proximity_zone: zone.to_string(),
     }))
 }
 
@@ -150,8 +150,8 @@ pub async fn geofence(
         distance_from_center_meters: (dist * 100.0).round() / 100.0,
         radius_meters: req.radius_meters,
         margin_meters: (margin * 100.0).round() / 100.0,
-        status,
-        proximity_zone: classify_proximity_zone(dist),
+        status: status.to_string(),
+        proximity_zone: classify_proximity_zone(dist).to_string(),
     }))
 }
 
@@ -181,7 +181,7 @@ pub async fn scan(
                 smoothed_rssi: (device.smoothed_rssi * 10.0).round() / 10.0,
                 estimated_distance_meters: (dist_m * 100.0).round() / 100.0,
                 estimated_steps: (dist_m / STEP_LENGTH_M).round() as u64,
-                trend,
+                trend: trend.to_string(),
             }
         })
         .collect();
@@ -211,7 +211,7 @@ pub async fn device_history(
             name: dev.name.clone(),
             current_rssi: dev.rssi,
             smoothed_rssi: (dev.smoothed_rssi * 10.0).round() / 10.0,
-            trend,
+            trend: trend.to_string(),
             history: dev.history.clone(),
         }))
     } else {

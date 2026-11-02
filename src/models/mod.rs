@@ -67,13 +67,13 @@ impl BluetoothInfo {
 pub struct DistanceResponse {
     pub distance: f64,
     pub distance_meters: f64,
-    pub unit: &'static str,
+    pub unit: String,
     pub estimated_steps: u64,
     pub threshold: u64,
     pub within_threshold: bool,
     pub bearing_degrees: f64,
-    pub direction: &'static str,
-    pub proximity_zone: &'static str,
+    pub direction: String,
+    pub proximity_zone: String,
 }
 
 /// Request payload for POST /proximity combining GPS points and reported Bluetooth state.
@@ -125,8 +125,8 @@ pub struct GeofenceResponse {
     pub distance_from_center_meters: f64,
     pub radius_meters: f64,
     pub margin_meters: f64,
-    pub status: &'static str,
-    pub proximity_zone: &'static str,
+    pub status: String,
+    pub proximity_zone: String,
 }
 
 /// Helper function to validate coordinate boundaries and validity.
@@ -158,13 +158,13 @@ pub struct ProximityResponse {
     pub bluetooth_detected: bool,
     pub distance: f64,
     pub gps_distance_meters: f64,
-    pub unit: &'static str,
+    pub unit: String,
     pub estimated_steps: u64,
     pub threshold: u64,
     pub within_threshold: bool,
     pub bearing_degrees: f64,
-    pub direction: &'static str,
-    pub proximity_zone: &'static str,
+    pub direction: String,
+    pub proximity_zone: String,
 }
 
 /// Telemetry item for a nearby detected Bluetooth device returned by GET /scan.
@@ -176,7 +176,7 @@ pub struct ScanResult {
     pub smoothed_rssi: f64,
     pub estimated_distance_meters: f64,
     pub estimated_steps: u64,
-    pub trend: &'static str,
+    pub trend: String,
 }
 
 /// Full historical report for a specific peripheral returned by GET /history/{id}.
@@ -186,7 +186,7 @@ pub struct DeviceHistoryResponse {
     pub name: String,
     pub current_rssi: i16,
     pub smoothed_rssi: f64,
-    pub trend: &'static str,
+    pub trend: String,
     pub history: Vec<ReadingRecord>,
 }
 

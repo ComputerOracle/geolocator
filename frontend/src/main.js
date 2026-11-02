@@ -57,6 +57,7 @@ function setupTabs() {
 }
 
 import { MapVisualizer } from './components/MapVisualizer.js';
+import { RadarScanner } from './components/RadarScanner.js';
 
 // Lifecycle boot
 document.addEventListener('DOMContentLoaded', () => {
@@ -68,5 +69,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const mapContainer = document.getElementById('tab-map');
   if (mapContainer) {
     new MapVisualizer(mapContainer);
+  }
+
+  // Initialize Radar Component
+  const radarContainer = document.getElementById('tab-radar');
+  if (radarContainer) {
+    new RadarScanner(radarContainer);
   }
 });

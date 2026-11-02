@@ -104,3 +104,27 @@ seconds is expected, not a bug.
 ```bash
 cargo test
 ```
+
+## Contributors
+
+Thanks to all the contributors who built and improved Geolocator!
+
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/greatKhalifa-code"><img src="https://github.com/greatKhalifa-code.png" width="80px;" alt="greatKhalifa-code"/><br /><sub><b>greatKhalifa-code</b></sub></a></td>
+    <td align="center"><a href="https://github.com/queentiffany1111-cloud"><img src="https://github.com/queentiffany1111-cloud.png" width="80px;" alt="queentiffany1111-cloud"/><br /><sub><b>queentiffany1111-cloud</b></sub></a></td>
+    <td align="center"><a href="https://github.com/dangerous-funds"><img src="https://github.com/dangerous-funds.png" width="80px;" alt="dangerous-funds"/><br /><sub><b>dangerous-funds</b></sub></a></td>
+    <td align="center"><a href="https://github.com/betiniSparks"><img src="https://github.com/betiniSparks.png" width="80px;" alt="betiniSparks"/><br /><sub><b>betiniSparks</b></sub></a></td>
+    <td align="center"><a href="https://github.com/dangerous-fundz"><img src="https://github.com/dangerous-fundz.png" width="80px;" alt="dangerous-fundz"/><br /><sub><b>dangerous-fundz</b></sub></a></td>
+    <td align="center"><a href="https://github.com/davidajohhnson"><img src="https://github.com/davidajohhnson.png" width="80px;" alt="davidajohhnson"/><br /><sub><b>davidajohhnson</b></sub></a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/Dev-Chizzy"><img src="https://github.com/Dev-Chizzy.png" width="80px;" alt="Dev-Chizzy"/><br /><sub><b>Dev-Chizzy</b></sub></a></td>
+    <td align="center"><a href="https://github.com/zicogoodness"><img src="https://github.com/zicogoodness.png" width="80px;" alt="zicogoodness"/><br /><sub><b>zicogoodness</b></sub></a></td>
+    <td align="center"><a href="https://github.com/nathanfrealmusic"><img src="https://github.com/nathanfrealmusic.png" width="80px;" alt="nathanfrealmusic"/><br /><sub><b>nathanfrealmusic</b></sub></a></td>
+    <td align="center"><a href="https://github.com/the-Devdrago"><img src="https://github.com/the-Devdrago.png" width="80px;" alt="the-Devdrago"/><br /><sub><b>the-Devdrago</b></sub></a></td>
+    <td align="center"><a href="https://github.com/bixbyhalleluyah"><img src="https://github.com/bixbyhalleluyah.png" width="80px;" alt="bixbyhalleluyah"/><br /><sub><b>bixbyhalleluyah</b></sub></a></td>
+    <td align="center"><a href="https://github.com/computeroracleinc"><img src="https://github.com/computeroracleinc.png" width="80px;" alt="computeroracleinc"/><br /><sub><b>computeroracleinc</b></sub></a></td>
+  </tr>
+</table>
+

@@ -22,6 +22,15 @@ pub async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Server is up! 🚀")
 }
 
+/// OpenAPI 3.0 specification endpoint.
+#[get("/openapi.yaml")]
+pub async fn openapi() -> impl Responder {
+    match std::fs::read_to_string("openapi.yaml") {
+        Ok(spec) => HttpResponse::Ok().content_type("application/yaml").body(spec),
+        Err(_) => HttpResponse::NotFound().body("openapi.yaml not found"),
+    }
+}
+
 /// System health check endpoint providing service uptime and basic operational flags.
 #[get("/health")]
 pub async fn health(

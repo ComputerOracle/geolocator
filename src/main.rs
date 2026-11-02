@@ -31,6 +31,7 @@ async fn main() -> std::io::Result<()> {
             .app_data(event_sender.clone())
             .app_data(telemetry.clone())
             .service(handlers::hello)
+            .service(handlers::openapi)
             .service(handlers::health)
             .service(handlers::metrics)
             .service(handlers::distance)

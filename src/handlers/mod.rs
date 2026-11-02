@@ -2,13 +2,14 @@ use crate::bluetooth::FRESHNESS_WINDOW;
 use crate::errors::AppError;
 use crate::events::EventSender;
 use crate::math::filters::calculate_trend;
+use crate::math::units::{classify_proximity_zone, DistanceUnit};
 use crate::math::{
     bearing_degrees, direction_from_bearing, haversine_distance_meters, rssi_to_distance_meters,
     STEP_LENGTH_M, STEP_THRESHOLD,
 };
 use crate::models::{
-    Coords, DeviceCache, DeviceHistoryResponse, DistanceResponse, ProximityRequest,
-    ProximityResponse, ScanResult,
+    Coords, DeviceCache, DeviceHistoryResponse, DistanceResponse, GeofenceRequest,
+    GeofenceResponse, NavQuery, ProximityRequest, ProximityResponse, ScanResult,
 };
 use actix_web::web::Bytes;
 use actix_web::{get, post, web, HttpResponse, Responder};
@@ -20,45 +21,100 @@ pub async fn hello() -> impl Responder {
     HttpResponse::Ok().body("Server is up! 🚀")
 }
 
-/// Distance calculation endpoint using GPS coordinates.
+/// Distance calculation endpoint with multi-unit support, dynamic thresholds, and step estimations.
 #[post("/distance")]
-pub async fn distance(coords: web::Json<Coords>) -> Result<HttpResponse, AppError> {
+pub async fn distance(
+    coords: web::Json<Coords>,
+    query: web::Query<NavQuery>,
+) -> Result<HttpResponse, AppError> {
     coords.validate()?;
 
+    let unit = DistanceUnit::from_str_opt(query.unit.as_deref());
+    let threshold = query.step_threshold.unwrap_or(STEP_THRESHOLD);
+    let stride = query.stride_m.unwrap_or(STEP_LENGTH_M).max(0.2);
+
     let meters = haversine_distance_meters(coords.lat1, coords.lon1, coords.lat2, coords.lon2);
-    let steps = (meters / STEP_LENGTH_M).round() as u64;
+    let converted_dist = unit.convert_from_meters(meters);
+    let steps = (meters / stride).round() as u64;
     let bearing = bearing_degrees(coords.lat1, coords.lon1, coords.lat2, coords.lon2);
+    let zone = classify_proximity_zone(meters);
 
     Ok(HttpResponse::Ok().json(DistanceResponse {
-        distance_meters: meters,
+        distance: (converted_dist * 100.0).round() / 100.0,
+        distance_meters: (meters * 100.0).round() / 100.0,
+        unit: unit.label(),
         estimated_steps: steps,
-        threshold: STEP_THRESHOLD,
-        within_threshold: steps <= STEP_THRESHOLD,
-        bearing_degrees: bearing,
+        threshold,
+        within_threshold: steps <= threshold,
+        bearing_degrees: (bearing * 10.0).round() / 10.0,
         direction: direction_from_bearing(bearing),
+        proximity_zone: zone,
     }))
 }
 
-/// Combined proximity assessment using GPS distance and reported Bluetooth state.
+/// Proximity verdict evaluating GPS points and device-reported Bluetooth telemetry.
 #[post("/proximity")]
-pub async fn proximity(req: web::Json<ProximityRequest>) -> Result<HttpResponse, AppError> {
+pub async fn proximity(
+    req: web::Json<ProximityRequest>,
+    query: web::Query<NavQuery>,
+) -> Result<HttpResponse, AppError> {
     req.validate()?;
 
+    let unit = DistanceUnit::from_str_opt(query.unit.as_deref());
+    let threshold = query.step_threshold.unwrap_or(STEP_THRESHOLD);
+    let stride = query.stride_m.unwrap_or(STEP_LENGTH_M).max(0.2);
+
     let meters = haversine_distance_meters(req.lat1, req.lon1, req.lat2, req.lon2);
-    let steps = (meters / STEP_LENGTH_M).round() as u64;
+    let converted_dist = unit.convert_from_meters(meters);
+    let steps = (meters / stride).round() as u64;
     let bearing = bearing_degrees(req.lat1, req.lon1, req.lat2, req.lon2);
     let bluetooth_detected = req.bluetooth.bluetooth_enabled && req.bluetooth.target_detected;
+    let zone = classify_proximity_zone(meters);
 
     Ok(HttpResponse::Ok().json(ProximityResponse {
         device_id: req.bluetooth.device_id.clone(),
         rssi: req.bluetooth.rssi,
         bluetooth_detected,
-        gps_distance_meters: meters,
+        distance: (converted_dist * 100.0).round() / 100.0,
+        gps_distance_meters: (meters * 100.0).round() / 100.0,
+        unit: unit.label(),
         estimated_steps: steps,
-        threshold: STEP_THRESHOLD,
-        within_threshold: steps <= STEP_THRESHOLD,
-        bearing_degrees: bearing,
+        threshold,
+        within_threshold: steps <= threshold,
+        bearing_degrees: (bearing * 10.0).round() / 10.0,
         direction: direction_from_bearing(bearing),
+        proximity_zone: zone,
+    }))
+}
+
+/// Evaluates whether a coordinate target is within a defined circular geofence boundary.
+#[post("/geofence")]
+pub async fn geofence(req: web::Json<GeofenceRequest>) -> Result<HttpResponse, AppError> {
+    req.validate()?;
+
+    let dist = haversine_distance_meters(
+        req.center_lat,
+        req.center_lon,
+        req.target_lat,
+        req.target_lon,
+    );
+    let margin = req.radius_meters - dist;
+    let is_inside = dist <= req.radius_meters;
+    let status = if (dist - req.radius_meters).abs() < 1.0 {
+        "perimeter"
+    } else if is_inside {
+        "inside"
+    } else {
+        "outside"
+    };
+
+    Ok(HttpResponse::Ok().json(GeofenceResponse {
+        is_inside,
+        distance_from_center_meters: (dist * 100.0).round() / 100.0,
+        radius_meters: req.radius_meters,
+        margin_meters: (margin * 100.0).round() / 100.0,
+        status,
+        proximity_zone: classify_proximity_zone(dist),
     }))
 }
 
@@ -89,7 +145,6 @@ pub async fn scan(cache: web::Data<DeviceCache>) -> Result<HttpResponse, AppErro
         })
         .collect();
 
-    // Sort closest device first
     results.sort_by(|a, b| a.estimated_distance_meters.total_cmp(&b.estimated_distance_meters));
 
     Ok(HttpResponse::Ok().json(results))

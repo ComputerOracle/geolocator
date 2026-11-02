@@ -13,6 +13,14 @@ pub struct ReadingRecord {
     pub timestamp_ms: u64,
 }
 
+/// Optional query parameters accepted by navigation endpoints.
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct NavQuery {
+    pub unit: Option<String>,
+    pub step_threshold: Option<u64>,
+    pub stride_m: Option<f64>,
+}
+
 /// Request payload for POST /distance containing two GPS coordinate pairs.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Coords {
@@ -54,15 +62,18 @@ impl BluetoothInfo {
     }
 }
 
-/// Response payload returned by POST /distance.
+/// Response payload returned by POST /distance with dynamic unit support.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DistanceResponse {
+    pub distance: f64,
     pub distance_meters: f64,
+    pub unit: &'static str,
     pub estimated_steps: u64,
     pub threshold: u64,
     pub within_threshold: bool,
     pub bearing_degrees: f64,
     pub direction: &'static str,
+    pub proximity_zone: &'static str,
 }
 
 /// Request payload for POST /proximity combining GPS points and reported Bluetooth state.
@@ -82,6 +93,40 @@ impl ProximityRequest {
         self.bluetooth.validate()?;
         Ok(())
     }
+}
+
+/// Request payload for circular geofence containment verification.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct GeofenceRequest {
+    pub center_lat: f64,
+    pub center_lon: f64,
+    pub radius_meters: f64,
+    pub target_lat: f64,
+    pub target_lon: f64,
+}
+
+impl GeofenceRequest {
+    pub fn validate(&self) -> Result<(), AppError> {
+        validate_lat_lon(self.center_lat, self.center_lon, "Center")?;
+        validate_lat_lon(self.target_lat, self.target_lon, "Target")?;
+        if self.radius_meters <= 0.0 || self.radius_meters.is_nan() || self.radius_meters.is_infinite() {
+            return Err(AppError::InvalidCoordinates(
+                "radius_meters must be a positive finite number".to_string(),
+            ));
+        }
+        Ok(())
+    }
+}
+
+/// Response payload returned by POST /geofence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeofenceResponse {
+    pub is_inside: bool,
+    pub distance_from_center_meters: f64,
+    pub radius_meters: f64,
+    pub margin_meters: f64,
+    pub status: &'static str,
+    pub proximity_zone: &'static str,
 }
 
 /// Helper function to validate coordinate boundaries and validity.
@@ -111,12 +156,15 @@ pub struct ProximityResponse {
     pub device_id: String,
     pub rssi: i32,
     pub bluetooth_detected: bool,
+    pub distance: f64,
     pub gps_distance_meters: f64,
+    pub unit: &'static str,
     pub estimated_steps: u64,
     pub threshold: u64,
     pub within_threshold: bool,
     pub bearing_degrees: f64,
     pub direction: &'static str,
+    pub proximity_zone: &'static str,
 }
 
 /// Telemetry item for a nearby detected Bluetooth device returned by GET /scan.
@@ -192,12 +240,10 @@ impl SeenDevice {
             timestamp_ms,
         });
 
-        // Cap history at the 25 most recent observations
         if self.history.len() > 25 {
             self.history.remove(0);
         }
     }
 }
 
-/// Thread-safe in-memory cache of nearby discovered Bluetooth devices.
 pub type DeviceCache = Mutex<HashMap<String, SeenDevice>>;

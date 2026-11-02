@@ -26,6 +26,7 @@ async fn main() -> std::io::Result<()> {
             .service(handlers::hello)
             .service(handlers::distance)
             .service(handlers::proximity)
+            .service(handlers::geofence)
             .service(handlers::scan)
             .service(handlers::device_history)
             .service(handlers::events)

@@ -27,6 +27,7 @@ async fn main() -> std::io::Result<()> {
             .service(handlers::distance)
             .service(handlers::proximity)
             .service(handlers::scan)
+            .service(handlers::device_history)
             .service(handlers::events)
     })
     .bind(("0.0.0.0", port))?

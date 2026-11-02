@@ -58,6 +58,8 @@ function setupTabs() {
 
 import { MapVisualizer } from './components/MapVisualizer.js';
 import { RadarScanner } from './components/RadarScanner.js';
+import { TripPlanner } from './components/TripPlanner.js';
+import { GeofenceMonitor } from './components/GeofenceMonitor.js';
 
 // Lifecycle boot
 document.addEventListener('DOMContentLoaded', () => {
@@ -75,5 +77,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const radarContainer = document.getElementById('tab-radar');
   if (radarContainer) {
     new RadarScanner(radarContainer);
+  }
+
+  // Initialize Trip Planner Component
+  const plannerContainer = document.getElementById('tab-planner');
+  if (plannerContainer) {
+    new TripPlanner(plannerContainer);
+  }
+
+  // Initialize Geofence & Telemetry Diagnostics Component
+  const geofenceContainer = document.getElementById('tab-geofence');
+  const telemetryContainer = document.getElementById('tab-telemetry');
+  if (geofenceContainer && telemetryContainer) {
+    new GeofenceMonitor(geofenceContainer, telemetryContainer);
   }
 });

@@ -64,3 +64,16 @@ fn invalid_rssi_fails() {
     let err = req.validate().unwrap_err();
     assert!(err.to_string().contains("RSSI must be between -130 and 0 dBm"));
 }
+
+#[test]
+fn geofence_validation_checks_radius() {
+    use geolocator::models::GeofenceRequest;
+    let req = GeofenceRequest {
+        center_lat: 6.5244,
+        center_lon: 3.3792,
+        radius_meters: -50.0,
+        target_lat: 6.5250,
+        target_lon: 3.3795,
+    };
+    assert!(req.validate().is_err());
+}

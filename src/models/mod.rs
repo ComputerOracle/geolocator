@@ -1,8 +1,17 @@
 use crate::errors::AppError;
+use crate::math::filters::RssiKalmanFilter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Instant;
+
+/// Individual historical observation recorded in a device's telemetry log.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadingRecord {
+    pub rssi: i16,
+    pub distance_meters: f64,
+    pub timestamp_ms: u64,
+}
 
 /// Request payload for POST /distance containing two GPS coordinate pairs.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -113,18 +122,81 @@ pub struct ProximityResponse {
 /// Telemetry item for a nearby detected Bluetooth device returned by GET /scan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScanResult {
+    pub id: String,
     pub name: String,
     pub rssi: i16,
+    pub smoothed_rssi: f64,
     pub estimated_distance_meters: f64,
     pub estimated_steps: u64,
+    pub trend: &'static str,
 }
 
-/// Internal state representation for a seen Bluetooth peripheral.
+/// Full historical report for a specific peripheral returned by GET /history/{id}.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceHistoryResponse {
+    pub device_id: String,
+    pub name: String,
+    pub current_rssi: i16,
+    pub smoothed_rssi: f64,
+    pub trend: &'static str,
+    pub history: Vec<ReadingRecord>,
+}
+
+/// Internal state representation for a seen Bluetooth peripheral with signal filter & history buffer.
 #[derive(Debug, Clone)]
 pub struct SeenDevice {
     pub name: String,
     pub rssi: i16,
+    pub smoothed_rssi: f64,
     pub last_seen: Instant,
+    pub kalman: RssiKalmanFilter,
+    pub history: Vec<ReadingRecord>,
+}
+
+impl SeenDevice {
+    pub fn new(name: String, initial_rssi: i16, dist_m: f64) -> Self {
+        let mut kalman = RssiKalmanFilter::default();
+        let smoothed = kalman.update(initial_rssi as f64);
+        let timestamp_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        Self {
+            name,
+            rssi: initial_rssi,
+            smoothed_rssi: smoothed,
+            last_seen: Instant::now(),
+            kalman,
+            history: vec![ReadingRecord {
+                rssi: initial_rssi,
+                distance_meters: dist_m,
+                timestamp_ms,
+            }],
+        }
+    }
+
+    pub fn record_reading(&mut self, new_rssi: i16, dist_m: f64) {
+        self.rssi = new_rssi;
+        self.smoothed_rssi = self.kalman.update(new_rssi as f64);
+        self.last_seen = Instant::now();
+
+        let timestamp_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+
+        self.history.push(ReadingRecord {
+            rssi: new_rssi,
+            distance_meters: dist_m,
+            timestamp_ms,
+        });
+
+        // Cap history at the 25 most recent observations
+        if self.history.len() > 25 {
+            self.history.remove(0);
+        }
+    }
 }
 
 /// Thread-safe in-memory cache of nearby discovered Bluetooth devices.

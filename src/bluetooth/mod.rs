@@ -5,7 +5,7 @@ use actix_web::web;
 use btleplug::api::{Central, CentralEvent, Manager as _, Peripheral as _, ScanFilter};
 use btleplug::platform::Manager;
 use futures::stream::StreamExt;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::time::sleep;
 
 /// Threshold window for considering a detected device "fresh" and actively in-range (40 seconds).
@@ -23,7 +23,7 @@ pub async fn run_bluetooth_scanner(cache: web::Data<DeviceCache>, event_sender: 
     }
 }
 
-/// Discovers the primary system Bluetooth adapter, listens for BLE events, updates the cache,
+/// Discovers the primary system Bluetooth adapter, listens for BLE events, updates the cache with smoothing,
 /// and broadcasts real-time telemetry events.
 async fn scan_until_disconnected(
     cache: &web::Data<DeviceCache>,
@@ -62,14 +62,13 @@ async fn scan_until_disconnected(
         let dist = rssi_to_distance_meters(rssi);
 
         if let Ok(mut guard) = cache.lock() {
-            guard.insert(
-                dev_id_str.clone(),
-                SeenDevice {
-                    name: name.clone(),
-                    rssi,
-                    last_seen: Instant::now(),
-                },
-            );
+            guard
+                .entry(dev_id_str.clone())
+                .and_modify(|d| {
+                    d.name = name.clone();
+                    d.record_reading(rssi, dist);
+                })
+                .or_insert_with(|| SeenDevice::new(name.clone(), rssi, dist));
         }
 
         // Broadcast to SSE stream subscribers

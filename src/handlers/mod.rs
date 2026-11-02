@@ -1,12 +1,14 @@
 use crate::bluetooth::FRESHNESS_WINDOW;
 use crate::errors::AppError;
 use crate::events::EventSender;
+use crate::math::filters::calculate_trend;
 use crate::math::{
     bearing_degrees, direction_from_bearing, haversine_distance_meters, rssi_to_distance_meters,
     STEP_LENGTH_M, STEP_THRESHOLD,
 };
 use crate::models::{
-    Coords, DeviceCache, DistanceResponse, ProximityRequest, ProximityResponse, ScanResult,
+    Coords, DeviceCache, DeviceHistoryResponse, DistanceResponse, ProximityRequest,
+    ProximityResponse, ScanResult,
 };
 use actix_web::web::Bytes;
 use actix_web::{get, post, web, HttpResponse, Responder};
@@ -60,7 +62,7 @@ pub async fn proximity(req: web::Json<ProximityRequest>) -> Result<HttpResponse,
     }))
 }
 
-/// Instant nearby device scan reading from the shared Bluetooth cache.
+/// Instant nearby device scan reading from the shared Bluetooth cache, enhanced with signal smoothing and trends.
 #[get("/scan")]
 pub async fn scan(cache: web::Data<DeviceCache>) -> Result<HttpResponse, AppError> {
     let seen = cache
@@ -68,15 +70,21 @@ pub async fn scan(cache: web::Data<DeviceCache>) -> Result<HttpResponse, AppErro
         .map_err(|_| AppError::LockError("Failed to acquire lock on device cache".to_string()))?;
 
     let mut results: Vec<ScanResult> = seen
-        .values()
-        .filter(|device| device.last_seen.elapsed() < FRESHNESS_WINDOW)
-        .map(|device| {
+        .iter()
+        .filter(|(_, device)| device.last_seen.elapsed() < FRESHNESS_WINDOW)
+        .map(|(id, device)| {
             let dist_m = rssi_to_distance_meters(device.rssi);
+            let readings: Vec<i16> = device.history.iter().map(|r| r.rssi).collect();
+            let trend = calculate_trend(&readings);
+
             ScanResult {
+                id: id.clone(),
                 name: device.name.clone(),
                 rssi: device.rssi,
-                estimated_distance_meters: dist_m,
+                smoothed_rssi: (device.smoothed_rssi * 10.0).round() / 10.0,
+                estimated_distance_meters: (dist_m * 100.0).round() / 100.0,
                 estimated_steps: (dist_m / STEP_LENGTH_M).round() as u64,
+                trend,
             }
         })
         .collect();
@@ -85,6 +93,34 @@ pub async fn scan(cache: web::Data<DeviceCache>) -> Result<HttpResponse, AppErro
     results.sort_by(|a, b| a.estimated_distance_meters.total_cmp(&b.estimated_distance_meters));
 
     Ok(HttpResponse::Ok().json(results))
+}
+
+/// Retrieves the historical trajectory and signal logs for a specific peripheral.
+#[get("/history/{device_id}")]
+pub async fn device_history(
+    cache: web::Data<DeviceCache>,
+    path: web::Path<String>,
+) -> Result<HttpResponse, AppError> {
+    let dev_id = path.into_inner();
+    let seen = cache
+        .lock()
+        .map_err(|_| AppError::LockError("Failed to acquire lock on device cache".to_string()))?;
+
+    if let Some(dev) = seen.get(&dev_id) {
+        let readings: Vec<i16> = dev.history.iter().map(|r| r.rssi).collect();
+        let trend = calculate_trend(&readings);
+
+        Ok(HttpResponse::Ok().json(DeviceHistoryResponse {
+            device_id: dev_id,
+            name: dev.name.clone(),
+            current_rssi: dev.rssi,
+            smoothed_rssi: (dev.smoothed_rssi * 10.0).round() / 10.0,
+            trend,
+            history: dev.history.clone(),
+        }))
+    } else {
+        Err(AppError::DeviceNotFound(dev_id))
+    }
 }
 
 /// Real-time Server-Sent Events (SSE) telemetry stream of nearby BLE device discoveries and updates.

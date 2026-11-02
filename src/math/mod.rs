@@ -1,3 +1,5 @@
+pub mod filters;
+
 /// Standard average human step length in meters.
 pub const STEP_LENGTH_M: f64 = 0.75;
 

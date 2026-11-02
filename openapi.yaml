@@ -1,0 +1,319 @@
+openapi: 3.0.3
+info:
+  title: Geolocator Proximity & Navigation Intelligence API
+  description: >
+    Production-grade proximity-aware navigation suite combining deterministic
+    Haversine GPS calculations with live and simulated Bluetooth Low Energy (BLE)
+    signal strength (RSSI) telemetry.
+  version: 0.1.0
+  contact:
+    name: Geolocator Core Team
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://geolocator.onrender.com
+    description: Production deployment
+
+paths:
+  /:
+    get:
+      summary: Root health check
+      operationId: getRoot
+      responses:
+        '200':
+          description: Server ping response
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Server is up! 🚀"
+
+  /health:
+    get:
+      summary: Operational health and uptime check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Detailed server status and runtime telemetry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsSnapshot'
+
+  /metrics:
+    get:
+      summary: Diagnostics and operational metrics report
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Real-time query counts and tracked peripheral tallies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MetricsSnapshot'
+
+  /distance:
+    post:
+      summary: Compute great-circle GPS distance, bearing, and estimated walking steps
+      operationId: calculateDistance
+      parameters:
+        - name: unit
+          in: query
+          schema:
+            type: string
+            enum: [m, km, mi, ft]
+            default: m
+          description: Unit for distance output
+        - name: step_threshold
+          in: query
+          schema:
+            type: integer
+            default: 10000
+          description: Maximum walking steps considered within range
+        - name: stride_m
+          in: query
+          schema:
+            type: number
+            default: 0.75
+          description: Average stride length in meters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Coords'
+      responses:
+        '200':
+          description: Distance calculation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistanceResponse'
+        '400':
+          description: Invalid coordinates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /proximity:
+    post:
+      summary: Combined GPS distance and device-reported Bluetooth proximity assessment
+      operationId: evaluateProximity
+      parameters:
+        - name: unit
+          in: query
+          schema:
+            type: string
+            enum: [m, km, mi, ft]
+            default: m
+        - name: step_threshold
+          in: query
+          schema:
+            type: integer
+            default: 10000
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProximityRequest'
+      responses:
+        '200':
+          description: Combined proximity evaluation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProximityResponse'
+
+  /geofence:
+    post:
+      summary: Evaluate circular geofence perimeter containment
+      operationId: evaluateGeofence
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GeofenceRequest'
+      responses:
+        '200':
+          description: Geofence containment verdict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GeofenceResponse'
+
+  /scan:
+    get:
+      summary: List all active nearby BLE devices from the smoothed device cache
+      operationId: listNearbyDevices
+      responses:
+        '200':
+          description: Sorted array of nearby Bluetooth peripherals (closest first)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ScanResult'
+
+  /history/{device_id}:
+    get:
+      summary: Retrieve historical RSSI observations and trajectory for a peripheral
+      operationId: getDeviceHistory
+      parameters:
+        - name: device_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Historical signal log
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceHistoryResponse'
+        '404':
+          description: Device not found
+
+  /events:
+    get:
+      summary: Server-Sent Events (SSE) real-time BLE discovery stream
+      operationId: streamEvents
+      responses:
+        '200':
+          description: Continuous text/event-stream of BLE discoveries and RSSI updates
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+components:
+  schemas:
+    Coords:
+      type: object
+      required: [lat1, lon1, lat2, lon2]
+      properties:
+        lat1: { type: number, example: 6.5244 }
+        lon1: { type: number, example: 3.3792 }
+        lat2: { type: number, example: 6.6018 }
+        lon2: { type: number, example: 3.3515 }
+
+    DistanceResponse:
+      type: object
+      properties:
+        distance: { type: number, example: 9.21 }
+        distance_meters: { type: number, example: 9210.45 }
+        unit: { type: string, example: "km" }
+        estimated_steps: { type: integer, example: 12281 }
+        threshold: { type: integer, example: 10000 }
+        within_threshold: { type: boolean, example: false }
+        bearing_degrees: { type: number, example: 341.2 }
+        direction: { type: string, example: "Northwest" }
+        proximity_zone: { type: string, example: "distant" }
+
+    BluetoothInfo:
+      type: object
+      required: [device_id, bluetooth_enabled, target_detected, rssi]
+      properties:
+        device_id: { type: string, example: "phone_01" }
+        bluetooth_enabled: { type: boolean, example: true }
+        target_detected: { type: boolean, example: true }
+        rssi: { type: integer, example: -58 }
+
+    ProximityRequest:
+      type: object
+      required: [lat1, lon1, lat2, lon2, bluetooth]
+      properties:
+        lat1: { type: number, example: 6.5244 }
+        lon1: { type: number, example: 3.3792 }
+        lat2: { type: number, example: 6.5260 }
+        lon2: { type: number, example: 3.3800 }
+        bluetooth: { $ref: '#/components/schemas/BluetoothInfo' }
+
+    ProximityResponse:
+      type: object
+      properties:
+        device_id: { type: string, example: "phone_01" }
+        rssi: { type: integer, example: -58 }
+        bluetooth_detected: { type: boolean, example: true }
+        distance: { type: number, example: 198.4 }
+        gps_distance_meters: { type: number, example: 198.4 }
+        unit: { type: string, example: "m" }
+        estimated_steps: { type: integer, example: 265 }
+        threshold: { type: integer, example: 10000 }
+        within_threshold: { type: boolean, example: true }
+        bearing_degrees: { type: number, example: 22.4 }
+        direction: { type: string, example: "Northeast" }
+        proximity_zone: { type: string, example: "vicinity" }
+
+    GeofenceRequest:
+      type: object
+      required: [center_lat, center_lon, radius_meters, target_lat, target_lon]
+      properties:
+        center_lat: { type: number, example: 6.5244 }
+        center_lon: { type: number, example: 3.3792 }
+        radius_meters: { type: number, example: 1000.0 }
+        target_lat: { type: number, example: 6.5260 }
+        target_lon: { type: number, example: 3.3800 }
+
+    GeofenceResponse:
+      type: object
+      properties:
+        is_inside: { type: boolean, example: true }
+        distance_from_center_meters: { type: number, example: 198.4 }
+        radius_meters: { type: number, example: 1000.0 }
+        margin_meters: { type: number, example: 801.6 }
+        status: { type: string, example: "inside" }
+        proximity_zone: { type: string, example: "vicinity" }
+
+    ScanResult:
+      type: object
+      properties:
+        id: { type: string, example: "00:11:22:33:44:55" }
+        name: { type: string, example: "SmartTag_01" }
+        rssi: { type: integer, example: -64 }
+        smoothed_rssi: { type: number, example: -63.8 }
+        estimated_distance_meters: { type: number, example: 1.74 }
+        estimated_steps: { type: integer, example: 2 }
+        trend: { type: string, example: "approaching" }
+
+    DeviceHistoryResponse:
+      type: object
+      properties:
+        device_id: { type: string, example: "00:11:22:33:44:55" }
+        name: { type: string, example: "SmartTag_01" }
+        current_rssi: { type: integer, example: -64 }
+        smoothed_rssi: { type: number, example: -63.8 }
+        trend: { type: string, example: "approaching" }
+        history:
+          type: array
+          items:
+            type: object
+            properties:
+              rssi: { type: integer, example: -64 }
+              distance_meters: { type: number, example: 1.74 }
+              timestamp_ms: { type: integer, example: 1730559000000 }
+
+    MetricsSnapshot:
+      type: object
+      properties:
+        status: { type: string, example: "healthy" }
+        version: { type: string, example: "0.1.0" }
+        uptime_seconds: { type: integer, example: 3420 }
+        total_api_requests: { type: integer, example: 450 }
+        distance_queries: { type: integer, example: 120 }
+        proximity_queries: { type: integer, example: 80 }
+        geofence_checks: { type: integer, example: 50 }
+        scan_queries: { type: integer, example: 200 }
+        ble_events_dispatched: { type: integer, example: 1420 }
+        currently_tracked_devices: { type: integer, example: 6 }
+
+    ErrorResponse:
+      type: object
+      properties:
+        error: { type: string, example: "Bad Request" }
+        status: { type: integer, example: 400 }
+        details: { type: string, example: "Point 1 latitude must be between -90.0 and 90.0" }

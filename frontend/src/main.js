@@ -56,9 +56,17 @@ function setupTabs() {
   });
 }
 
+import { MapVisualizer } from './components/MapVisualizer.js';
+
 // Lifecycle boot
 document.addEventListener('DOMContentLoaded', () => {
   setupTabs();
   refreshTelemetry();
   setInterval(refreshTelemetry, 5000);
+
+  // Initialize Map Component
+  const mapContainer = document.getElementById('tab-map');
+  if (mapContainer) {
+    new MapVisualizer(mapContainer);
+  }
 });

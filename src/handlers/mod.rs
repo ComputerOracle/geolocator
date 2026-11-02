@@ -1,5 +1,6 @@
 use crate::bluetooth::FRESHNESS_WINDOW;
 use crate::errors::AppError;
+use crate::events::EventSender;
 use crate::math::{
     bearing_degrees, direction_from_bearing, haversine_distance_meters, rssi_to_distance_meters,
     STEP_LENGTH_M, STEP_THRESHOLD,
@@ -7,7 +8,9 @@ use crate::math::{
 use crate::models::{
     Coords, DeviceCache, DistanceResponse, ProximityRequest, ProximityResponse, ScanResult,
 };
+use actix_web::web::Bytes;
 use actix_web::{get, post, web, HttpResponse, Responder};
+use futures::StreamExt as _;
 
 /// Health check endpoint.
 #[get("/")]
@@ -82,4 +85,26 @@ pub async fn scan(cache: web::Data<DeviceCache>) -> Result<HttpResponse, AppErro
     results.sort_by(|a, b| a.estimated_distance_meters.total_cmp(&b.estimated_distance_meters));
 
     Ok(HttpResponse::Ok().json(results))
+}
+
+/// Real-time Server-Sent Events (SSE) telemetry stream of nearby BLE device discoveries and updates.
+#[get("/events")]
+pub async fn events(sender: web::Data<EventSender>) -> impl Responder {
+    let rx = sender.subscribe();
+    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|msg| async move {
+        match msg {
+            Ok(evt) => {
+                let json = serde_json::to_string(&evt).ok()?;
+                let formatted = format!("data: {json}\n\n");
+                Some(Ok::<Bytes, actix_web::Error>(Bytes::from(formatted)))
+            }
+            Err(_) => None,
+        }
+    });
+
+    HttpResponse::Ok()
+        .append_header(("content-type", "text/event-stream"))
+        .append_header(("cache-control", "no-cache"))
+        .append_header(("connection", "keep-alive"))
+        .streaming(stream)
 }

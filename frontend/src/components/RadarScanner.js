@@ -20,6 +20,21 @@ export class RadarScanner {
     this.container.innerHTML = `
       <div class="radar-layout">
         <div class="radar-scope-card glass-panel">
+          <!-- Nearest Device Tracking Banner HUD -->
+          <div id="nearest-tracking-banner" class="nearest-tracking-hud" style="width: 100%; margin-bottom: 14px; padding: 12px 16px; background: rgba(0, 240, 255, 0.05); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 1.2rem;">⏱️</span>
+              <div>
+                <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-family: var(--font-mono);">Nearest BLE Target Cover Time</div>
+                <div id="nearest-target-info" style="font-weight: 700; color: var(--text-primary); font-size: 0.88rem;">Scanning for nearest...</div>
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div id="nearest-time-val" style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan); font-family: var(--font-mono);">--</div>
+              <div style="font-size: 0.68rem; color: var(--text-muted); font-family: var(--font-mono);">@ 1.39 m/s walk</div>
+            </div>
+          </div>
+
           <canvas id="sonar-canvas" width="500" height="500"></canvas>
           <div class="radar-legend">
             <span>INNER: 1-5m</span>
@@ -163,9 +178,11 @@ export class RadarScanner {
         name: event.name,
         rssi: event.rssi,
         estimated_distance_meters: event.estimated_distance_meters,
+        estimated_time_to_cover_seconds: event.estimated_time_to_cover_seconds,
         trend: 'approaching',
       });
       this.updateDeviceListUI();
+      this.updateNearestBanner();
     });
   }
 
@@ -174,8 +191,28 @@ export class RadarScanner {
       const results = await api.getScan();
       results.forEach((d) => this.devices.set(d.id, d));
       this.updateDeviceListUI();
+      this.updateNearestBanner();
     } catch (e) {
       // Backend scanner may be quiet if no real BLE devices nearby
+    }
+  }
+
+  async updateNearestBanner() {
+    try {
+      const nearestData = await api.getNearestDevice();
+      const infoEl = document.getElementById('nearest-target-info');
+      const timeEl = document.getElementById('nearest-time-val');
+      if (!infoEl || !timeEl) return;
+
+      if (nearestData.nearest_device) {
+        infoEl.innerHTML = `${nearestData.nearest_device.name} <span style="font-size: 0.75rem; color: var(--accent-emerald);">(${nearestData.nearest_device.estimated_distance_meters}m)</span>`;
+        timeEl.textContent = nearestData.estimated_time_to_cover_formatted;
+      } else {
+        infoEl.textContent = 'No active BLE devices in range';
+        timeEl.textContent = '--';
+      }
+    } catch (e) {
+      // Ignore background fetch error
     }
   }
 
@@ -205,6 +242,7 @@ export class RadarScanner {
 
           <div class="dev-metrics-right">
             <span class="rssi-pill">${dev.rssi} dBm (~${dev.estimated_distance_meters}m)</span>
+            <span style="font-family: var(--font-mono); font-size: 0.72rem; color: var(--accent-emerald);">~${dev.estimated_time_to_cover_seconds !== undefined ? dev.estimated_time_to_cover_seconds + 's' : Math.round((dev.estimated_distance_meters / 1.39) * 10) / 10 + 's'} cover</span>
             <span class="trend-pill trend-${dev.trend || 'stationary'}">${dev.trend || 'active'}</span>
           </div>
         </div>

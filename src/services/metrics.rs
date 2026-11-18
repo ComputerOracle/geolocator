@@ -9,6 +9,7 @@ pub struct TelemetryRegistry {
     pub total_proximity_requests: AtomicU64,
     pub total_geofence_checks: AtomicU64,
     pub total_scan_requests: AtomicU64,
+    pub total_nearest_requests: AtomicU64,
     pub total_ble_events_dispatched: AtomicU64,
 }
 
@@ -20,6 +21,7 @@ impl Default for TelemetryRegistry {
             total_proximity_requests: AtomicU64::new(0),
             total_geofence_checks: AtomicU64::new(0),
             total_scan_requests: AtomicU64::new(0),
+            total_nearest_requests: AtomicU64::new(0),
             total_ble_events_dispatched: AtomicU64::new(0),
         }
     }
@@ -42,6 +44,10 @@ impl TelemetryRegistry {
         self.total_scan_requests.fetch_add(1, Ordering::Relaxed);
     }
 
+    pub fn record_nearest(&self) {
+        self.total_nearest_requests.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn record_ble_event(&self) {
         self.total_ble_events_dispatched.fetch_add(1, Ordering::Relaxed);
     }
@@ -52,8 +58,9 @@ impl TelemetryRegistry {
         let prox = self.total_proximity_requests.load(Ordering::Relaxed);
         let geo = self.total_geofence_checks.load(Ordering::Relaxed);
         let scan = self.total_scan_requests.load(Ordering::Relaxed);
+        let nearest = self.total_nearest_requests.load(Ordering::Relaxed);
         let ble = self.total_ble_events_dispatched.load(Ordering::Relaxed);
-        let total = dist + prox + geo + scan;
+        let total = dist + prox + geo + scan + nearest;
 
         MetricsSnapshot {
             status: "healthy",
@@ -64,6 +71,7 @@ impl TelemetryRegistry {
             proximity_queries: prox,
             geofence_checks: geo,
             scan_queries: scan,
+            nearest_queries: nearest,
             ble_events_dispatched: ble,
             currently_tracked_devices: active_devices,
         }
@@ -80,6 +88,7 @@ pub struct MetricsSnapshot {
     pub proximity_queries: u64,
     pub geofence_checks: u64,
     pub scan_queries: u64,
+    pub nearest_queries: u64,
     pub ble_events_dispatched: u64,
     pub currently_tracked_devices: usize,
 }
@@ -96,6 +105,7 @@ mod tests {
         registry.record_proximity();
         registry.record_geofence();
         registry.record_scan();
+        registry.record_nearest();
         registry.record_ble_event();
 
         let snap = registry.snapshot(5);
@@ -103,7 +113,8 @@ mod tests {
         assert_eq!(snap.proximity_queries, 1);
         assert_eq!(snap.geofence_checks, 1);
         assert_eq!(snap.scan_queries, 1);
-        assert_eq!(snap.total_api_requests, 5);
+        assert_eq!(snap.nearest_queries, 1);
+        assert_eq!(snap.total_api_requests, 6);
         assert_eq!(snap.ble_events_dispatched, 1);
         assert_eq!(snap.currently_tracked_devices, 5);
         assert_eq!(snap.status, "healthy");

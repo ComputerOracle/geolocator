@@ -19,6 +19,7 @@ pub struct NavQuery {
     pub unit: Option<String>,
     pub step_threshold: Option<u64>,
     pub stride_m: Option<f64>,
+    pub speed_mps: Option<f64>,
 }
 
 /// Request payload for POST /distance containing two GPS coordinate pairs.
@@ -165,6 +166,7 @@ pub struct ProximityResponse {
     pub bearing_degrees: f64,
     pub direction: String,
     pub proximity_zone: String,
+    pub estimated_time_to_cover_seconds: f64,
 }
 
 /// Telemetry item for a nearby detected Bluetooth device returned by GET /scan.
@@ -176,7 +178,18 @@ pub struct ScanResult {
     pub smoothed_rssi: f64,
     pub estimated_distance_meters: f64,
     pub estimated_steps: u64,
+    pub estimated_time_to_cover_seconds: f64,
     pub trend: String,
+}
+
+/// Tracking factor response for the nearest Bluetooth device returned by GET /nearest.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NearestDeviceResponse {
+    pub nearest_device: Option<ScanResult>,
+    pub estimated_time_to_cover_seconds: Option<f64>,
+    pub estimated_time_to_cover_formatted: String,
+    pub walking_speed_mps: f64,
+    pub active_devices_count: usize,
 }
 
 /// Full historical report for a specific peripheral returned by GET /history/{id}.

@@ -1,6 +1,9 @@
 use actix_web::{test, web, App};
 use geolocator::handlers;
-use geolocator::models::{Coords, DeviceCache, DistanceResponse, GeofenceRequest, GeofenceResponse};
+use geolocator::models::{
+    Coords, DeviceCache, DistanceResponse, GeofenceRequest, GeofenceResponse,
+    NearestDeviceResponse, ScanResult, SeenDevice,
+};
 use geolocator::services::metrics::TelemetryRegistry;
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -110,4 +113,52 @@ async fn test_bearing_math_edge_cases() {
     let b2 = bearing_degrees(0.0, 0.0, 0.0, 10.0);
     assert!((b2 - 90.0).abs() < 1e-4);
     assert_eq!(direction_from_bearing(b2), "East");
+}
+
+#[actix_web::test]
+async fn test_nearest_device_and_scan_time_to_cover() {
+    let cache: web::Data<DeviceCache> = web::Data::new(Mutex::new(HashMap::new()));
+    let registry: web::Data<TelemetryRegistry> = web::Data::new(TelemetryRegistry::default());
+
+    // Populate mock devices in cache:
+    // dev_far: -79 dBm (~10.0m)
+    // dev_near: -59 dBm (~1.0m)
+    {
+        let mut guard = cache.lock().unwrap();
+        guard.insert(
+            "dev_far".to_string(),
+            SeenDevice::new("Far Beacon".to_string(), -79, 10.0),
+        );
+        guard.insert(
+            "dev_near".to_string(),
+            SeenDevice::new("Near Beacon".to_string(), -59, 1.0),
+        );
+    }
+
+    let app = test::init_service(
+        App::new()
+            .app_data(cache.clone())
+            .app_data(registry.clone())
+            .service(handlers::scan)
+            .service(handlers::nearest_device),
+    )
+    .await;
+
+    // Test GET /scan with estimated_time_to_cover_seconds
+    let scan_req = test::TestRequest::get().uri("/scan").to_request();
+    let scan_resp: Vec<ScanResult> = test::call_and_read_body_json(&app, scan_req).await;
+    assert_eq!(scan_resp.len(), 2);
+    assert_eq!(scan_resp[0].id, "dev_near");
+    assert!(scan_resp[0].estimated_time_to_cover_seconds > 0.0);
+
+    // Test GET /nearest tracking factor endpoint
+    let nearest_req = test::TestRequest::get().uri("/nearest").to_request();
+    let nearest_resp: NearestDeviceResponse = test::call_and_read_body_json(&app, nearest_req).await;
+    assert!(nearest_resp.nearest_device.is_some());
+    let nearest = nearest_resp.nearest_device.unwrap();
+    assert_eq!(nearest.id, "dev_near");
+    assert_eq!(nearest.name, "Near Beacon");
+    assert!(nearest_resp.estimated_time_to_cover_seconds.is_some());
+    assert!(!nearest_resp.estimated_time_to_cover_formatted.is_empty());
+    assert_eq!(nearest_resp.active_devices_count, 2);
 }

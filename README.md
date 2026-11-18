@@ -122,6 +122,7 @@ docker run -p 8080:8080 geolocator
 | `POST` | `/proximity` | Combined GPS distance + phone Bluetooth status verdict |
 | `POST` | `/geofence` | Circular boundary containment and margin evaluation |
 | `GET` | `/scan` | Sorted list of currently active BLE devices (closest first) |
+| `GET` | `/nearest` | Tracking factor: time to cover the nearest Bluetooth device |
 | `GET` | `/history/{device_id}` | Historical RSSI trajectory and trend for a device |
 | `GET` | `/events` | Server-Sent Events (SSE) live telemetry stream |
 | `GET` | `/openapi.yaml` | OpenAPI 3.0 specification file |

@@ -148,6 +148,13 @@ paths:
     get:
       summary: List all active nearby BLE devices from the smoothed device cache
       operationId: listNearbyDevices
+      parameters:
+        - name: speed_mps
+          in: query
+          schema:
+            type: number
+            default: 1.39
+          description: Walking speed in meters per second for time to cover estimation
       responses:
         '200':
           description: Sorted array of nearby Bluetooth peripherals (closest first)
@@ -157,6 +164,25 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ScanResult'
+
+  /nearest:
+    get:
+      summary: Track time to cover the nearest Bluetooth device (tracking factor)
+      operationId: getNearestDevice
+      parameters:
+        - name: speed_mps
+          in: query
+          schema:
+            type: number
+            default: 1.39
+          description: Walking speed in meters per second
+      responses:
+        '200':
+          description: Nearest Bluetooth device tracking telemetry and estimated time to cover
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NearestDeviceResponse'
 
   /history/{device_id}:
     get:
@@ -248,6 +274,7 @@ components:
         bearing_degrees: { type: number, example: 22.4 }
         direction: { type: string, example: "Northeast" }
         proximity_zone: { type: string, example: "vicinity" }
+        estimated_time_to_cover_seconds: { type: number, example: 142.7 }
 
     GeofenceRequest:
       type: object
@@ -278,7 +305,18 @@ components:
         smoothed_rssi: { type: number, example: -63.8 }
         estimated_distance_meters: { type: number, example: 1.74 }
         estimated_steps: { type: integer, example: 2 }
+        estimated_time_to_cover_seconds: { type: number, example: 1.3 }
         trend: { type: string, example: "approaching" }
+
+    NearestDeviceResponse:
+      type: object
+      properties:
+        nearest_device:
+          $ref: '#/components/schemas/ScanResult'
+        estimated_time_to_cover_seconds: { type: number, example: 1.3 }
+        estimated_time_to_cover_formatted: { type: string, example: "1.3s" }
+        walking_speed_mps: { type: number, example: 1.39 }
+        active_devices_count: { type: integer, example: 3 }
 
     DeviceHistoryResponse:
       type: object
@@ -308,6 +346,7 @@ components:
         proximity_queries: { type: integer, example: 80 }
         geofence_checks: { type: integer, example: 50 }
         scan_queries: { type: integer, example: 200 }
+        nearest_queries: { type: integer, example: 60 }
         ble_events_dispatched: { type: integer, example: 1420 }
         currently_tracked_devices: { type: integer, example: 6 }
 

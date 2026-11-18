@@ -5,11 +5,12 @@ use crate::math::filters::calculate_trend;
 use crate::math::units::{classify_proximity_zone, DistanceUnit};
 use crate::math::{
     bearing_degrees, direction_from_bearing, haversine_distance_meters, rssi_to_distance_meters,
-    STEP_LENGTH_M, STEP_THRESHOLD,
+    time_to_cover_seconds, STEP_LENGTH_M, STEP_THRESHOLD, WALKING_SPEED_MPS,
 };
 use crate::models::{
     Coords, DeviceCache, DeviceHistoryResponse, DistanceResponse, GeofenceRequest,
-    GeofenceResponse, NavQuery, ProximityRequest, ProximityResponse, ScanResult,
+    GeofenceResponse, NavQuery, NearestDeviceResponse, ProximityRequest, ProximityResponse,
+    ScanResult,
 };
 use crate::services::metrics::TelemetryRegistry;
 use actix_web::web::Bytes;
@@ -105,6 +106,7 @@ pub async fn proximity(
     let unit = DistanceUnit::from_str_opt(query.unit.as_deref());
     let threshold = query.step_threshold.unwrap_or(STEP_THRESHOLD);
     let stride = query.stride_m.unwrap_or(STEP_LENGTH_M).max(0.2);
+    let speed = query.speed_mps.unwrap_or(WALKING_SPEED_MPS);
 
     let meters = haversine_distance_meters(req.lat1, req.lon1, req.lat2, req.lon2);
     let converted_dist = unit.convert_from_meters(meters);
@@ -112,6 +114,7 @@ pub async fn proximity(
     let bearing = bearing_degrees(req.lat1, req.lon1, req.lat2, req.lon2);
     let bluetooth_detected = req.bluetooth.bluetooth_enabled && req.bluetooth.target_detected;
     let zone = classify_proximity_zone(meters);
+    let time_to_cover = time_to_cover_seconds(meters, speed);
 
     Ok(HttpResponse::Ok().json(ProximityResponse {
         device_id: req.bluetooth.device_id.clone(),
@@ -126,6 +129,7 @@ pub async fn proximity(
         bearing_degrees: (bearing * 10.0).round() / 10.0,
         direction: direction_from_bearing(bearing).to_string(),
         proximity_zone: zone.to_string(),
+        estimated_time_to_cover_seconds: (time_to_cover * 10.0).round() / 10.0,
     }))
 }
 
@@ -169,8 +173,10 @@ pub async fn geofence(
 pub async fn scan(
     cache: web::Data<DeviceCache>,
     registry: web::Data<TelemetryRegistry>,
+    query: web::Query<NavQuery>,
 ) -> Result<HttpResponse, AppError> {
     registry.record_scan();
+    let speed = query.speed_mps.unwrap_or(WALKING_SPEED_MPS);
     let seen = cache
         .lock()
         .map_err(|_| AppError::LockError("Failed to acquire lock on device cache".to_string()))?;
@@ -182,6 +188,7 @@ pub async fn scan(
             let dist_m = rssi_to_distance_meters(device.rssi);
             let readings: Vec<i16> = device.history.iter().map(|r| r.rssi).collect();
             let trend = calculate_trend(&readings);
+            let time_to_cover = time_to_cover_seconds(dist_m, speed);
 
             ScanResult {
                 id: id.clone(),
@@ -190,6 +197,7 @@ pub async fn scan(
                 smoothed_rssi: (device.smoothed_rssi * 10.0).round() / 10.0,
                 estimated_distance_meters: (dist_m * 100.0).round() / 100.0,
                 estimated_steps: (dist_m / STEP_LENGTH_M).round() as u64,
+                estimated_time_to_cover_seconds: (time_to_cover * 10.0).round() / 10.0,
                 trend: trend.to_string(),
             }
         })
@@ -198,6 +206,69 @@ pub async fn scan(
     results.sort_by(|a, b| a.estimated_distance_meters.total_cmp(&b.estimated_distance_meters));
 
     Ok(HttpResponse::Ok().json(results))
+}
+
+/// Tracks the total time it will take to cover the nearest Bluetooth device.
+#[get("/nearest")]
+pub async fn nearest_device(
+    cache: web::Data<DeviceCache>,
+    registry: web::Data<TelemetryRegistry>,
+    query: web::Query<NavQuery>,
+) -> Result<HttpResponse, AppError> {
+    registry.record_nearest();
+    let speed = query.speed_mps.unwrap_or(WALKING_SPEED_MPS);
+    let seen = cache
+        .lock()
+        .map_err(|_| AppError::LockError("Failed to acquire lock on device cache".to_string()))?;
+
+    let mut active_devices: Vec<ScanResult> = seen
+        .iter()
+        .filter(|(_, device)| device.last_seen.elapsed() < FRESHNESS_WINDOW)
+        .map(|(id, device)| {
+            let dist_m = rssi_to_distance_meters(device.rssi);
+            let readings: Vec<i16> = device.history.iter().map(|r| r.rssi).collect();
+            let trend = calculate_trend(&readings);
+            let time_to_cover = time_to_cover_seconds(dist_m, speed);
+
+            ScanResult {
+                id: id.clone(),
+                name: device.name.clone(),
+                rssi: device.rssi,
+                smoothed_rssi: (device.smoothed_rssi * 10.0).round() / 10.0,
+                estimated_distance_meters: (dist_m * 100.0).round() / 100.0,
+                estimated_steps: (dist_m / STEP_LENGTH_M).round() as u64,
+                estimated_time_to_cover_seconds: (time_to_cover * 10.0).round() / 10.0,
+                trend: trend.to_string(),
+            }
+        })
+        .collect();
+
+    active_devices.sort_by(|a, b| a.estimated_distance_meters.total_cmp(&b.estimated_distance_meters));
+
+    let active_count = active_devices.len();
+    let nearest = active_devices.into_iter().next();
+    let (time_sec, time_formatted) = match &nearest {
+        Some(dev) => {
+            let s = dev.estimated_time_to_cover_seconds;
+            let formatted = if s < 60.0 {
+                format!("{:.1}s", s)
+            } else {
+                let mins = (s / 60.0).floor() as u64;
+                let rem_sec = (s % 60.0).round() as u64;
+                format!("{}m {}s", mins, rem_sec)
+            };
+            (Some(s), formatted)
+        }
+        None => (None, "No active BLE device detected".to_string()),
+    };
+
+    Ok(HttpResponse::Ok().json(NearestDeviceResponse {
+        nearest_device: nearest,
+        estimated_time_to_cover_seconds: time_sec,
+        estimated_time_to_cover_formatted: time_formatted,
+        walking_speed_mps: speed,
+        active_devices_count: active_count,
+    }))
 }
 
 /// Retrieves the historical trajectory and signal logs for a specific peripheral.

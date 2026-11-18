@@ -76,6 +76,14 @@ export class GeoClient {
     return res.json();
   }
 
+  async getNearestDevice(speed_mps = 1.39) {
+    const url = new URL(`${this.baseUrl}/nearest`);
+    if (speed_mps) url.searchParams.set('speed_mps', speed_mps);
+    const res = await fetch(url.toString());
+    if (!res.ok) throw new Error(`Nearest query failed: ${res.statusText}`);
+    return res.json();
+  }
+
   async getDeviceHistory(deviceId) {
     const res = await fetch(`${this.baseUrl}/history/${encodeURIComponent(deviceId)}`);
     const data = await res.json();

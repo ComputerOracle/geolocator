@@ -7,6 +7,19 @@ pub const STEP_LENGTH_M: f64 = 0.75;
 /// Default maximum walking steps considered within proximate range (10,000 steps).
 pub const STEP_THRESHOLD: u64 = 10_000;
 
+/// Average human walking speed in meters per second (~5.0 km/h or 1.39 m/s).
+pub const WALKING_SPEED_MPS: f64 = 1.39;
+
+/// Computes the estimated time in seconds to cover a given distance in meters based on a walking speed.
+pub fn time_to_cover_seconds(distance_meters: f64, speed_mps: f64) -> f64 {
+    let speed = if speed_mps <= 0.0 || speed_mps.is_nan() {
+        WALKING_SPEED_MPS
+    } else {
+        speed_mps
+    };
+    distance_meters.max(0.0) / speed
+}
+
 /// The Haversine formula: calculates the great-circle distance between two GPS coordinates on Earth in meters.
 pub fn haversine_distance_meters(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let earth_radius_m = 6_371_000.0;
@@ -83,5 +96,15 @@ mod tests {
     fn rssi_at_measured_power_is_one_meter() {
         let dist = rssi_to_distance_meters(-59);
         assert!((dist - 1.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn time_to_cover_calculates_accurately() {
+        let time = time_to_cover_seconds(139.0, 1.39);
+        assert!((time - 100.0).abs() < 0.001);
+
+        // Fallback on invalid or zero speed
+        let fallback_time = time_to_cover_seconds(139.0, 0.0);
+        assert!((fallback_time - 100.0).abs() < 0.001);
     }
 }
